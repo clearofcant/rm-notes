@@ -16,15 +16,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def is_highlight_color(fill):
-    """Check if a fill color is a yellow highlight color."""
-    if not fill or len(fill) < 3:
-        return False
-    r, g, b = fill[0], fill[1], fill[2]
-    # reMarkable uses a yellow highlight: roughly (1.0, 0.93, 0.46)
-    return r > 0.9 and g > 0.8 and b < 0.6
-
-
 def extract_highlights(pdf_path):
     """Extract all highlights from a PDF, organized by page."""
     doc = fitz.open(pdf_path)
@@ -34,26 +25,17 @@ def extract_highlights(pdf_path):
         page = doc[page_num]
         page_highlights = []
 
-        # Check for highlight annotations (standard PDF highlights)
-        for annot in page.annots() or []:
-            if annot.type[0] == 8:  # Highlight annotation type
-                quads = annot.vertices
-                if quads:
-                    for i in range(0, len(quads), 4):
-                        quad = quads[i : i + 4]
-                        rect = fitz.Rect(quad[0], quad[2])
+        # reMarkable exports highlights as yellow filled rectangles
+        for drawing in page.get_drawings():
+            fill = drawing.get("fill")
+            if fill and len(fill) >= 3:
+                r, g, b = fill[0], fill[1], fill[2]
+                if r > 0.9 and g > 0.8 and b < 0.6:  # Yellow highlight
+                    rect = drawing.get("rect")
+                    if rect:
                         text = page.get_text("text", clip=rect).strip()
                         if text:
                             page_highlights.append(text)
-
-        # Check for drawings (reMarkable exports highlights as filled rectangles)
-        for drawing in page.get_drawings():
-            if is_highlight_color(drawing.get("fill")):
-                rect = drawing.get("rect")
-                if rect:
-                    text = page.get_text("text", clip=rect).strip()
-                    if text:
-                        page_highlights.append(text)
 
         if page_highlights:
             highlights_by_page[page_num + 1] = page_highlights
@@ -90,12 +72,7 @@ def main():
         sys.exit(0)
 
     markdown = format_markdown(highlights, args.pdf_path.name)
-
-    if args.output:
-        output_path = args.output
-    else:
-        output_path = args.pdf_path.with_suffix(".md")
-
+    output_path = args.output or args.pdf_path.with_suffix(".md")
     output_path.write_text(markdown)
     print(f"Highlights extracted to: {output_path}")
 
