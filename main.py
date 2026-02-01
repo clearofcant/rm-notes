@@ -16,22 +16,13 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_text_from_annotation(page, annot):
-    """Extract text within the annotation bounds."""
-    quads = annot.vertices
-    if not quads:
-        return ""
-
-    text_parts = []
-    # Vertices come in groups of 4 (quadrilaterals)
-    for i in range(0, len(quads), 4):
-        quad = quads[i : i + 4]
-        rect = fitz.Rect(quad[0], quad[2])
-        text = page.get_text("text", clip=rect).strip()
-        if text:
-            text_parts.append(text)
-
-    return " ".join(text_parts)
+def is_highlight_color(fill):
+    """Check if a fill color is a yellow highlight color."""
+    if not fill or len(fill) < 3:
+        return False
+    r, g, b = fill[0], fill[1], fill[2]
+    # reMarkable uses a yellow highlight: roughly (1.0, 0.93, 0.46)
+    return r > 0.9 and g > 0.8 and b < 0.6
 
 
 def extract_highlights(pdf_path):
@@ -43,11 +34,26 @@ def extract_highlights(pdf_path):
         page = doc[page_num]
         page_highlights = []
 
+        # Check for highlight annotations (standard PDF highlights)
         for annot in page.annots() or []:
             if annot.type[0] == 8:  # Highlight annotation type
-                text = get_text_from_annotation(page, annot)
-                if text:
-                    page_highlights.append(text)
+                quads = annot.vertices
+                if quads:
+                    for i in range(0, len(quads), 4):
+                        quad = quads[i : i + 4]
+                        rect = fitz.Rect(quad[0], quad[2])
+                        text = page.get_text("text", clip=rect).strip()
+                        if text:
+                            page_highlights.append(text)
+
+        # Check for drawings (reMarkable exports highlights as filled rectangles)
+        for drawing in page.get_drawings():
+            if is_highlight_color(drawing.get("fill")):
+                rect = drawing.get("rect")
+                if rect:
+                    text = page.get_text("text", clip=rect).strip()
+                    if text:
+                        page_highlights.append(text)
 
         if page_highlights:
             highlights_by_page[page_num + 1] = page_highlights
