@@ -20,6 +20,12 @@ uv run rm-notes book.pdf
 
 # Specify output file
 uv run rm-notes book.pdf -o notes.md
+
+# Force OCR mode (for scanned/image-based PDFs)
+uv run rm-notes book.pdf --ocr
+
+# OCR with a different language (default: eng)
+uv run rm-notes book.pdf --ocr --ocr-lang deu
 ```
 
 ## Output
@@ -36,6 +42,21 @@ uv run rm-notes book.pdf -o notes.md
 ## Page 15
 
 > Another highlight here
+```
+
+## OCR Support
+
+For image-based PDFs (scans), the tool automatically falls back to OCR when text extraction fails. OCR requires [Tesseract](https://github.com/tesseract-ocr/tesseract) to be installed:
+
+```bash
+# Arch Linux
+sudo pacman -S tesseract tesseract-data-eng
+
+# Ubuntu/Debian
+sudo apt install tesseract-ocr tesseract-ocr-eng
+
+# macOS
+brew install tesseract
 ```
 
 ## How it works
