@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Extract highlighted text from PDFs exported from reMarkable 2"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["pymupdf"]
+dependencies = ["pymupdf", "pytesseract", "pillow"]
 
 [project.scripts]
 rm-notes = "main:main"
