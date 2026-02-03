@@ -1,6 +1,6 @@
 # rm-notes
 
-Extract highlighted text from PDFs exported from reMarkable 2.
+Extract annotated text from PDFs exported from reMarkable 2. Supports both yellow highlights and margin annotations (vertical lines, curly braces).
 
 ## Installation
 
@@ -31,17 +31,17 @@ uv run rm-notes book.pdf --ocr --ocr-lang deu
 ## Output
 
 ```markdown
-# Highlights from: book.pdf
+# Annotations from: book.pdf
 
 ## Page 12
 
-> First highlighted phrase from this page
+> First highlighted passage from this page
 
-> Second highlighted phrase from this page
+> Second highlighted passage from this page
 
 ## Page 15
 
-> Another highlight here
+> Text marked with a margin brace
 ```
 
 ## OCR Support
@@ -61,4 +61,7 @@ brew install tesseract
 
 ## How it works
 
-reMarkable exports highlights as yellow filled rectangles rather than standard PDF annotations. This tool scans each page for these rectangles and extracts the text within their bounds.
+reMarkable exports annotations as filled shapes rather than standard PDF annotations:
+
+- **Highlights** appear as yellow filled rectangles. The tool extracts text within these bounds.
+- **Margin marks** (vertical lines, curly braces) appear as dark filled shapes. The tool extracts text spanning the vertical range of these marks.
