@@ -31,6 +31,7 @@ def group_rects(rects, threshold=20):
 
     groups = []
     for rect in sorted(rects, key=lambda r: r.y0):
+        merged = False
         for group in groups:
             for g in group:
                 expanded = fitz.Rect(
@@ -39,11 +40,11 @@ def group_rects(rects, threshold=20):
                 )
                 if expanded.intersects(rect):
                     group.append(rect)
+                    merged = True
                     break
-            else:
-                continue
-            break
-        else:
+            if merged:
+                break
+        if not merged:
             groups.append([rect])
     return groups
 
