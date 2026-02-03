@@ -56,26 +56,40 @@ def extract_text_ocr(page, rect, lang):
     return pytesseract.image_to_string(img, lang=lang).strip()
 
 
-def extract_highlights(pdf_path, force_ocr=False, ocr_lang="eng"):
-    """Extract all highlights from a PDF, organized by page."""
+def extract_annotations(pdf_path, force_ocr=False, ocr_lang="eng"):
+    """Extract all annotations (highlights and margin marks) from a PDF, organized by page."""
     doc = fitz.open(pdf_path)
-    highlights_by_page = {}
+    annotations_by_page = {}
 
     for page_num, page in enumerate(doc, 1):
-        rects = []
+        page_annotations = []
+        highlight_rects = []
+        margin_rects = []
+
         for drawing in page.get_drawings():
             fill = drawing.get("fill")
-            if fill and len(fill) >= 3:
-                r, g, b = fill[:3]
-                if r > 0.9 and g > 0.8 and b < 0.6:
-                    if rect := drawing.get("rect"):
-                        rects.append(fitz.Rect(rect))
+            if not fill or len(fill) < 3:
+                continue
 
-        if not rects:
-            continue
+            r, g, b = fill[:3]
+            rect = drawing.get("rect")
+            if not rect:
+                continue
+            rect = fitz.Rect(rect)
+            height = rect.height
+            width = rect.width
 
-        page_highlights = []
-        for group in group_rects(rects):
+            # Yellow highlight detection (existing)
+            if r > 0.9 and g > 0.8 and b < 0.6:
+                highlight_rects.append(rect)
+
+            # Dark vertical shape detection (margin marks)
+            elif r < 0.5 and g < 0.5 and b < 0.5:
+                if height > 15 and height > width * 2:
+                    margin_rects.append(rect)
+
+        # Extract text from highlights
+        for group in group_rects(highlight_rects):
             bbox = group[0]
             for r in group[1:]:
                 bbox |= r
@@ -86,23 +100,45 @@ def extract_highlights(pdf_path, force_ocr=False, ocr_lang="eng"):
                     text = ocr_text
 
             if text:
-                page_highlights.append(text)
+                page_annotations.append(text)
 
-        if page_highlights:
-            highlights_by_page[page_num] = page_highlights
+        # Extract text within vertical span of margin marks
+        for group in group_rects(margin_rects):
+            bbox = group[0]
+            for r in group[1:]:
+                bbox |= r
+
+            # Full page width, with small vertical buffer
+            buffer = 5
+            text_clip = fitz.Rect(
+                0,                    # left edge of page
+                bbox.y0 - buffer,
+                page.rect.width,      # right edge of page
+                bbox.y1 + buffer
+            )
+            text = page.get_text("text", clip=text_clip).strip()
+            if force_ocr or len(text) < 3:
+                if ocr_text := extract_text_ocr(page, text_clip, ocr_lang):
+                    text = ocr_text
+
+            if text:
+                page_annotations.append(text)
+
+        if page_annotations:
+            annotations_by_page[page_num] = page_annotations
 
     doc.close()
-    return highlights_by_page
+    return annotations_by_page
 
 
-def format_markdown(highlights_by_page, pdf_name):
-    """Convert highlights to Markdown format."""
-    lines = [f"# Highlights from: {pdf_name}", ""]
-    for page_num in sorted(highlights_by_page.keys()):
+def format_markdown(annotations_by_page, pdf_name):
+    """Convert annotations to Markdown format."""
+    lines = [f"# Annotations from: {pdf_name}", ""]
+    for page_num in sorted(annotations_by_page.keys()):
         lines.append(f"## Page {page_num}")
         lines.append("")
-        for highlight in highlights_by_page[page_num]:
-            lines.append(f"> {highlight}")
+        for annotation in annotations_by_page[page_num]:
+            lines.append(f"> {annotation}")
             lines.append("")
     return "\n".join(lines)
 
@@ -114,16 +150,16 @@ def main():
         print(f"Error: File not found: {args.pdf_path}", file=sys.stderr)
         sys.exit(1)
 
-    highlights = extract_highlights(args.pdf_path, args.ocr, args.ocr_lang)
+    annotations = extract_annotations(args.pdf_path, args.ocr, args.ocr_lang)
 
-    if not highlights:
-        print("No highlights found in the PDF.", file=sys.stderr)
+    if not annotations:
+        print("No annotations found in the PDF.", file=sys.stderr)
         sys.exit(0)
 
-    markdown = format_markdown(highlights, args.pdf_path.name)
+    markdown = format_markdown(annotations, args.pdf_path.name)
     output_path = args.output or args.pdf_path.with_suffix(".md")
     output_path.write_text(markdown)
-    print(f"Highlights extracted to: {output_path}")
+    print(f"Annotations extracted to: {output_path}")
 
 
 if __name__ == "__main__":
